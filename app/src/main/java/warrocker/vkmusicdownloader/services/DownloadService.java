@@ -61,7 +61,6 @@ public class DownloadService extends Service {
 
     public class LocalBinder extends Binder {
         public DownloadService getService() {
-            // Return this instance of LocalService so clients can call public methods
             return DownloadService.this;
         }
     }
@@ -70,6 +69,12 @@ public class DownloadService extends Service {
     }
     private void addItemToQueue(JSONObject audioItemForDownload){
         itemQueue.addLast(audioItemForDownload);
+        if(itemQueue.size() > 1) {
+        mBuilder.setContentTitle("Download " + (itemQueue.size() + 1) + " files");
+        }else{
+            mBuilder.setContentTitle("Download file");
+        }
+        mNotifyManager.notify(id, mBuilder.build());
     }
 
     private class DownloadThread implements Runnable{
@@ -84,7 +89,12 @@ public class DownloadService extends Service {
         public void run() {
             while (!t.isInterrupted()) {
                 while (itemQueue.peek() !=null) {
-
+                    if(itemQueue.size() > 1) {
+                        mBuilder.setContentTitle("Download " + (itemQueue.size()) + " files");
+                    }else{
+                        mBuilder.setContentTitle("Download file");
+                    }
+                    mNotifyManager.notify(id, mBuilder.build());
                     JSONObject audioItem = itemQueue.pop();
                     loadFromUrlToFile(audioItem);
                 }
@@ -113,7 +123,11 @@ public class DownloadService extends Service {
             String titleText = "";
             if (audioItem != null) {
                 try {
-                    titleText = audioItem.getString("artist") + " - " + audioItem.getString("title");
+                    if(itemQueue.size() ==0) {
+                        titleText = audioItem.getString("artist") + " - " + audioItem.getString("title");
+                    } else {
+                        titleText = audioItem.getString("artist") + " - " + audioItem.getString("title");
+                    }
                     downloadURL = new URL(audioItem.getString("url"));
                 } catch (MalformedURLException e) {
                     Message message = toastHandler.obtainMessage(1, "Unknown address");
@@ -122,8 +136,9 @@ public class DownloadService extends Service {
                     Message message = toastHandler.obtainMessage(1, "File error");
                     message.sendToTarget();
                 }
+
                 mBuilder.setContentText(titleText);
-                fileLenght = getFileSize(downloadURL) / 1024;
+                fileLenght = getFileSize(downloadURL);
                 notificationThread = new NotifyThread(0, fileLenght);
                 if (downloadURL != null) {
                     try (BufferedInputStream in = new BufferedInputStream(downloadURL.openStream());
@@ -133,11 +148,11 @@ public class DownloadService extends Service {
                         int currentProgress = 0;
                         while ((count = in.read(byteArray)) != -1) {
                             fio.write(byteArray, 0, count);
-                            currentProgress = currentProgress + (count / 1024);
+                            currentProgress = currentProgress + (count);
                             notificationThread.updateProgress(currentProgress);
                         }
                         notificationThread.setInterrupted();
-                        mBuilder.setContentText("Download complete")
+                        mBuilder.setContentTitle("Download complete")
                                 // Removes the progress bar
                                 .setProgress(0, 0, false);
                         mNotifyManager.notify(id, mBuilder.build());
